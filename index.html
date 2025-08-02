@@ -1,1 +1,587 @@
-<h1>Hello World!</h1>
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Student Debt Visualization with Scene Buttons</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-family: sans-serif;
+      background-color: #dcdcde;
+    }
+
+    .container {
+      text-align: center;
+      max-width: 1200px;
+      width: 100%;
+      padding: 20px;
+    }
+
+    .chart {
+      margin-top: 20px;
+    }
+
+    .title {
+      font-size: 28px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+
+    .annotation {
+      font-size: 16px;
+      font-weight: bold;
+      color: black;
+      margin-top: 25px;
+    }
+
+    #buttons {
+      margin-bottom: 20px;
+    }
+
+    button {
+      margin: 5px;
+      padding: 8px 14px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button.active {
+      background-color: #355bb5;
+      color: white;
+      border: none;
+    }
+
+    svg {
+      display: block;
+      margin: 0 auto;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="container">
+    <h1>Student Debt in America: A Visual Story</h1>
+
+    <div id="buttons">
+      <button id="btn1" class="active">Debt Growth</button>
+      <button id="btn2">Who Holds Debt</button>
+      <button id="btn3">Burden of Debt</button>
+    </div>
+
+    <div id="scene" class="chart">
+      <div class="title" id="scene-title"></div>
+      <svg width="1100" height="550"></svg>
+      <div class="annotation" id="scene-annotation">
+      </div>
+    </div>
+  </div>
+
+  <script>
+
+    // Initialize Global Variables
+    const svg = d3.select("#scene svg");
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
+    const margin = { top: 30, right: 100, bottom: 50, left: 100 };
+    const chartWidth = width - margin.left - margin.right;
+    const chartHeight = height - margin.top - margin.bottom;
+
+    const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+    // Clear Chart
+    function clearChart() {
+      g.selectAll("*").remove();
+    }
+
+    // Set Which Button Is Active
+    function setActiveButton(id) {
+      d3.selectAll("#buttons button").classed("active", false);
+      d3.select(`#${id}`).classed("active", true);
+    }
+
+
+    // -----------------------------------------        SCENE 1        -----------------------------------------
+
+
+    function drawScene1() {
+      clearChart();
+
+      // Hide dropdown if it exists
+      d3.select(".dropdown").style("display", "none");
+
+      // Read in Scene 1 Data
+      d3.csv("scene1.csv").then(data => {
+        data.forEach(d => {
+          d.Label = `${d.Year} ${d.Quarter}`;
+          d.Auto_Loan = +d.Auto_Loan;
+          d.Credit_Card = +d.Credit_Card;
+          d.Mortgage = +d.Mortgage;
+          d.Other = +d.Other;
+          d.Revolving = +d.HE_Revolving;
+          d.Student_Loan = +d.Student_Loan;
+          d.Total = +d.Total;
+        });
+
+        // Keys for use in sorting and coloring - ordered from largest amount to smallest (other at end)
+        const keys = ["Mortgage", "Student_Loan", "Auto_Loan", "Credit_Card", "Revolving", "Other"];
+
+        // Assign Colors
+        const colors = {
+          Auto_Loan: "#636870",    // dark gray
+          Credit_Card: "#78a6f0",  // light blue
+          Mortgage: "#5a83c7",     // blue
+          Other: "#8093b0",        // light gray
+          Revolving: "#1f4787",    // dark blue      
+          Student_Loan: "#d62943"  // vibrant red
+        };
+
+        // Generate Stack Area Graph
+        const stackedData = d3.stack()
+          .keys(keys)
+          .offset(d3.stackOffsetNone)
+          (data);
+
+        const x = d3.scalePoint()
+          .domain(data.map(d => d.Label))
+          .range([0, chartWidth])
+          .padding(0.01);
+
+        const y = d3.scaleLinear()
+          .domain([0, d3.max(stackedData, layer => d3.max(layer, d => d[1]))])
+          .range([chartHeight, 0]);
+
+        const area = d3.area()
+          .x((d, i) => x(data[i].Label))
+          .y0(d => y(d[0]))
+          .y1(d => y(d[1]))
+          .curve(d3.curveBasis);
+
+        stackedData.forEach((layer, i) => {
+          g.append("path")
+            .datum(layer)
+            .attr("fill", colors[keys[i]])
+            .attr("d", area);
+
+          const lastIndex = layer.length - 1;
+          const lastPoint = layer[lastIndex];
+          const labelX = x(data[lastIndex].Label);
+          const labelY = y((lastPoint[0] + lastPoint[1]) / 2);
+
+          g.append("text")
+            .attr("x", labelX + 3) 
+            .attr("y", labelY)
+            .attr("dy", "0.35em")
+            .attr("font-size", "14px")
+            .attr("fill", colors[keys[i]])
+            .attr("font-weight", "bold")
+            .text(keys[i].replace(/_/g, " "));
+        });
+
+        // X-axis
+        g.append("g")
+          .attr("transform", `translate(0,${chartHeight})`)
+          .call(
+            d3.axisBottom(x)
+              .tickValues(x.domain().filter((_, i) => i % 4 === 0))
+          )
+          .selectAll("text")
+          .attr("transform", "rotate(-60)")
+          .style("text-anchor", "end");
+
+        // Y-axis
+        g.append("g").call(d3.axisLeft(y));
+
+        // Y-axis Label
+        g.append("text")
+          .attr("transform", "rotate(-90)")
+          .attr("x", -chartHeight / 2)
+          .attr("y", -margin.left + 60)
+          .attr("text-anchor", "middle")
+          .attr("font-size", "14px")
+          .attr("font-weight", "bold")
+          .text("Debt (in Trillions USD)");
+
+        // Tool Tip
+        const tooltip = d3.select("body")
+          .append("div")
+          .attr("class", "tooltip")
+          .style("position", "absolute")
+          .style("background", "rgba(255,255,255,0.95)")
+          .style("padding", "6px 10px")
+          .style("border", "1px solid #ccc")
+          .style("border-radius", "4px")
+          .style("font-size", "12px")
+          .style("pointer-events", "none")
+          .style("display", "none");
+
+        stackedData.forEach((layer, i) => {
+          layer.forEach((d, j) => {
+            g.append("circle")
+              .attr("cx", x(data[j].Label))
+              .attr("cy", y((d[0] + d[1]) / 2))
+              .attr("r", 6)
+              .attr("fill", "transparent")
+              .style("cursor", "pointer")
+              .on("mouseover", () => {
+                const value = data[j][keys[i]];
+                const total = data[j].Total;
+                const percent = total ? (value / total) * 100 : 0;
+                tooltip
+                  .style("display", "block")
+                  .html(`
+                    <strong>${keys[i]}</strong><br/>
+                    Quarter: ${data[j].Label}<br/>
+                    Value: ${d3.format(",.2f")(value)} Trillion<br/>
+                    <span style="color: black">${d3.format(".1f")(percent)}% of Total Debt</span>
+                  `);
+              })
+              .on("mousemove", (event) => {
+                tooltip
+                  .style("left", (event.pageX + 10) + "px")
+                  .style("top", (event.pageY - 30) + "px");
+              })
+              .on("mouseout", () => {
+                tooltip.style("display", "none");
+              });
+          });
+        });
+      });
+
+      d3.select("#scene-title").text("Growth of Student Loan Debt (1999–2025)");
+      d3.select("#scene-annotation").html("The above is a stacked area chart showing the increase in various types of debt over time. " + 
+        "Of the different types of debt, Student Loans are the fastest growing type of debt in the US. " +
+        "From 2003 to 2025 Student Loan debt has increased 677%. Data is sourced from the " +
+        `<a href="https://www.newyorkfed.org/microeconomics/hhdc.html" target="_blank" style="color: #355bb5; text-decoration: underline;"> Federal Reserve Bank of New York</a>.`);
+    }
+
+    
+    // -----------------------------------------        SCENE 2        -----------------------------------------
+
+
+    function drawScene2() {
+      clearChart();
+
+      // Hide dropdown if it exists
+      d3.select(".dropdown").style("display", "none");
+
+      // Read in Scene 2 Data
+      d3.csv("scene2.csv").then(data => {
+        const ageGroups = data.columns.slice(1);
+
+        data.forEach(d => {
+          d.Year = +d.Year;
+          ageGroups.forEach(group => d[group] = +d[group]);
+        });
+
+        const x = d3.scaleLinear()
+          .domain(d3.extent(data, d => d.Year))
+          .range([0, chartWidth]);
+
+        const y = d3.scaleLinear()
+          .domain([0, d3.max(data, d => d3.max(ageGroups, group => d[group]))])
+          .nice()
+          .range([chartHeight, 0]);
+
+        const colors = {
+          "Less than 35": "#d62943", // vibrant red
+          "35-44": "#c22b6a",        // dark pink
+          "45-54": "#78a6f0",        // light blue
+          "55-64": "#5a83c7",        // blue
+          "65-74": "#1f4787",        // dark blue
+          "75 or older": "#636870"   // dark gray
+        };
+
+        const color = d3.scaleOrdinal()
+          .domain(ageGroups)
+          .range(d3.schemeCategory10);
+
+        // Tooltip
+        const tooltip = d3.select("body")
+          .append("div")
+          .attr("class", "tooltip")
+          .style("position", "absolute")
+          .style("background", "rgba(255,255,255,0.95)")
+          .style("padding", "6px 10px")
+          .style("border", "1px solid #ccc")
+          .style("border-radius", "4px")
+          .style("font-size", "12px")
+          .style("pointer-events", "none")
+          .style("display", "none");
+
+        // Draw lines and points
+        ageGroups.forEach(group => {
+          const line = d3.line()
+            .x(d => x(d.Year))
+            .y(d => y(d[group]));
+
+          g.append("path")
+            .datum(data)
+            .attr("fill", "none")
+            .attr("stroke", colors[group])
+            .attr("stroke-width", 2)
+            .attr("d", line);
+
+          g.selectAll(`.dot-${group.replace(/\s+/g, "-")}`)
+            .data(data)
+            .enter()
+            .append("circle")
+            .attr("cx", d => x(d.Year))
+            .attr("cy", d => y(d[group]))
+            .attr("r", 2)
+            .attr("fill", colors[group])
+            .on("mouseover", (event, d) => {
+              tooltip
+                .style("display", "block")
+                .html(`
+              <strong>${group}</strong><br/>
+              Year: ${d.Year}<br/>
+              Value: ${d3.format(".1f")(d[group])}%
+            `);
+            })
+            .on("mousemove", (event) => {
+              tooltip
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 30) + "px");
+            })
+            .on("mouseout", () => tooltip.style("display", "none"));
+
+          // Line Labels
+          g.append("text")
+            .datum(data[data.length - 1])
+            .attr("x", x(data[data.length - 1].Year) + 5)
+            .attr("y", y(data[data.length - 1][group]))
+            .attr("fill", colors[group])
+            .attr("font-size", "12px")
+            .attr("font-weight", "bold")
+            .text(group);
+        });
+
+        // X-axis
+        g.append("g")
+          .attr("transform", `translate(0,${chartHeight})`)
+          .call(d3.axisBottom(x).tickFormat(d3.format("d")));
+
+        // Y-axis
+        g.append("g")
+          .call(d3.axisLeft(y));
+
+        // X-axis Label
+        g.append("text")
+          .attr("class", "axis-label")
+          .attr("x", chartWidth / 2)
+          .attr("y", chartHeight + 40)
+          .attr("text-anchor", "middle")
+          .attr("font-weight", "bold")
+          .text("Year");
+
+        // Y-axis Label
+        g.append("text")
+          .attr("class", "axis-label")
+          .attr("transform", "rotate(-90)")
+          .attr("x", -chartHeight / 2)
+          .attr("y", -35)
+          .attr("text-anchor", "middle")
+          .attr("font-weight", "bold")
+          .text("Percentage with Student Loan Debt (%)");
+      });
+
+      d3.select("#scene-title").text("Percentage of Age Group Holding Student Loan Debt (1989–2022)");
+      d3.select("#scene-annotation").html("As seen above the proportion of each age group holding student loan debt has increased over the last 30 years. " +
+        "In particular there has been a sharp rise in the proportion of Americans under the age of 44 that hold student loan debt. Data sourced from the " +
+        `<a href="https://www.federalreserve.gov/econres/scfindex.htm" target="_blank" style="color: #355bb5; text-decoration: underline;"> Federal Reserve's Survey of Consumer Finances</a>.`);
+    }
+
+    
+    // -----------------------------------------        SCENE 3        -----------------------------------------
+
+
+    function drawScene3() {
+      clearChart();
+
+      let layoutContainer = d3.select("#scene").select(".scene3");
+      if (layoutContainer.empty()) {
+        layoutContainer = d3.select("#scene")
+          .insert("div", "svg")
+          .attr("class", "scene3")
+          .style("display", "flex")
+          .style("gap", "20px")
+          .style("align-items", "flex-start");
+
+        // Move the existing SVG into the layout container
+        const svg = d3.select("#scene svg").remove();
+        layoutContainer.node().appendChild(svg.node());
+      }
+
+      let dropdownContainer = layoutContainer.select(".dropdown");
+      if (dropdownContainer.empty()) {
+        dropdownContainer = layoutContainer
+          .append("div")
+          .attr("class", "dropdown")
+          .style("min-width", "180px")
+          .style("display", "none"); // hidden by default
+      } else {
+        dropdownContainer.style("display", "none");
+      }
+
+      // Read in Scene 3 Data
+      d3.csv("scene3.csv").then(data => {
+        const ageGroups = ["24 and Younger", "25 to 34", "35 to 49", "50 to 61", "62 and Older"];
+
+        data.forEach(d => {
+          ageGroups.forEach(k => d[k] = +d[k]);
+          d.Label = `${d.year} ${d.quarter}`;
+        });
+
+        const quarters = Array.from(new Set(data.map(d => d.Label)));
+
+        let dropdown = dropdownContainer.select("#dropdown");
+        if (dropdown.empty()) {
+          dropdown = dropdownContainer
+            .append("select")
+            .attr("id", "dropdown")
+            .style("font-size", "14px")
+            .style("margin-top", "10px");
+        }
+
+        dropdown.selectAll("option")
+          .data(quarters)
+          .join("option")
+          .text(d => d)
+          .attr("value", d => d);
+
+        const x = d3.scaleBand().padding(0.2).range([0, chartWidth]);
+        const y = d3.scaleLinear().range([chartHeight, 0]);
+        const barColor = "#112a80";
+
+        const tooltip = d3.select("body")
+          .append("div")
+          .attr("class", "tooltip")
+          .style("position", "absolute")
+          .style("background", "rgba(255,255,255,0.95)")
+          .style("padding", "6px 10px")
+          .style("border", "1px solid #ccc")
+          .style("border-radius", "4px")
+          .style("font-size", "12px")
+          .style("pointer-events", "none")
+          .style("display", "none");
+
+        const updateChart = selectedLabel => {
+          const entry = data.find(d => d.Label === selectedLabel);
+          const values = ageGroups.map(group => ({ group, value: entry[group] }));
+
+          x.domain(ageGroups);
+          y.domain([0, d3.max(values, d => d.value)]).nice();
+
+          const bars = g.selectAll(".bar").data(values, d => d.group);
+
+          bars.enter()
+            .append("rect")
+            .attr("class", "bar")
+            .attr("x", d => x(d.group))
+            .attr("width", x.bandwidth())
+            .attr("y", chartHeight)
+            .attr("height", 0)
+            .attr("fill", barColor)
+            .on("mouseover", (event, d) => {
+              tooltip
+                .style("display", "block")
+                .html(`$${d3.format(",.2f")(d.value)} Billion`);
+            })
+            .on("mousemove", (event) => {
+              tooltip
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 30) + "px");
+            })
+            .on("mouseout", () => tooltip.style("display", "none"))
+            .attr("y", d => y(d.value))
+            .attr("height", d => chartHeight - y(d.value));
+
+          bars.exit().remove();
+
+          g.selectAll(".x-axis").remove();
+          g.selectAll(".y-axis").remove();
+          g.selectAll(".axis-label").remove();
+
+          // X-axis
+          g.append("g")
+            .attr("class", "x-axis")
+            .attr("transform", `translate(0,${chartHeight})`)
+            .call(d3.axisBottom(x));
+
+          // Y-axis
+          g.append("g")
+            .attr("class", "y-axis")
+            .call(d3.axisLeft(y));
+
+          // X-axis Label
+          g.append("text")
+            .attr("class", "axis-label")
+            .attr("x", chartWidth / 2)
+            .attr("y", chartHeight + 40)
+            .attr("text-anchor", "middle")
+            .attr("font-size", "14px")
+            .attr("font-weight", "bold")
+            .text("Age Group");
+
+          // Y-axis Label
+          g.append("text")
+            .attr("class", "axis-label")
+            .attr("transform", "rotate(-90)")
+            .attr("x", -chartHeight / 2)
+            .attr("y", -50)
+            .attr("text-anchor", "middle")
+            .attr("font-size", "14px")
+            .attr("font-weight", "bold")
+            .text("Dollars Outstanding (in Billions USD)");
+        };
+
+        dropdown.on("change", function () {
+          const selected = this.value;
+          updateChart(selected);
+        });
+
+        updateChart(quarters[0]);
+
+        dropdownContainer.style("display", "block");
+      });
+
+      d3.select("#scene-title").text("Outstanding Student Loan Debt by Age Group");
+      d3.select("#scene-annotation").html("Using the dropdown to the right of the chart, it can be seen that for any given quart in the past decade " +
+        "that the vast amount of outstanding student loan debt is held by Americans between the ages of 25 and 49. Adding the fact from the previous chart that " +
+        "a substantial proportion of Americans in this age range hold student loan debt it means there are many young American burdened by a large amount of student loan debt. " +
+        "This large cohort of young American incumbered with a substantial amount of debt will undoubtly impact many areas of American civics; in particular politics, marriage, and population growth." +
+        "The data in the above chart was sourced from the" +
+        `<a href="https://studentaid.gov/data-center/student/portfolio" target="_blank" style="color: #355bb5; text-decoration: underline;"> U.S. Department of Education</a>.`);
+    }
+
+    // Button click handlers
+    d3.select("#btn1").on("click", () => {
+      setActiveButton("btn1");
+      drawScene1();
+    });
+
+    d3.select("#btn2").on("click", () => {
+      setActiveButton("btn2");
+      drawScene2();
+    });
+
+    d3.select("#btn3").on("click", () => {
+      setActiveButton("btn3");
+      drawScene3();
+    });
+
+    // Initial draw
+    drawScene1();
+
+  </script>
+</body>
+
+</html>
