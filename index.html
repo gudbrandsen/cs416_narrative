@@ -238,7 +238,7 @@
                   .style("display", "block")
                   .html(`
                     <strong>${keys[i]}</strong><br/>
-                    Quarter: ${data[j].Label}<br/>
+                    Quarter: ${data[j].Label.replace(/_/g, " ")}<br/>
                     Amount: ${d3.format(",.2f")(value)} Trillion<br/>
                     <span style="color: black">${d3.format(".1f")(percent)}% of Total Debt</span>
                   `);
