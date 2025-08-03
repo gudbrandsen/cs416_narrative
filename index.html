@@ -239,7 +239,7 @@
                   .html(`
                     <strong>${keys[i]}</strong><br/>
                     Quarter: ${data[j].Label}<br/>
-                    Value: ${d3.format(",.2f")(value)} Trillion<br/>
+                    Amount: ${d3.format(",.2f")(value)} Trillion<br/>
                     <span style="color: black">${d3.format(".1f")(percent)}% of Total Debt</span>
                   `);
               })
@@ -343,7 +343,7 @@
                 .html(`
               <strong>${group}</strong><br/>
               Year: ${d.Year}<br/>
-              Value: ${d3.format(".1f")(d[group])}%
+              Proportion: ${d3.format(".1f")(d[group])}%
             `);
             })
             .on("mousemove", (event) => {
